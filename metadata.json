@@ -1,0 +1,5 @@
+{
+  "name": "CabinetVision AI",
+  "description": "Upload a photo of your kitchen and visualize different cabinet paint colors using Gemini's image editing capabilities.",
+  "requestFramePermissions": []
+}
