@@ -1,16 +1,12 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { AnalysisResult } from "../types";
 
-/**
- * Helper to convert File to Base64
- */
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => {
       const result = reader.result as string;
-      // Remove data:image/xxx;base64, prefix for Gemini
       const base64Data = result.split(',')[1];
       resolve(base64Data);
     };
@@ -18,9 +14,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-/**
- * Analyzes the kitchen image to suggest colors using Gemini 2.5 Flash
- */
 export const analyzeKitchenAndSuggestColors = async (base64Image: string): Promise<AnalysisResult> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
@@ -72,10 +65,6 @@ export const analyzeKitchenAndSuggestColors = async (base64Image: string): Promi
   }
 };
 
-/**
- * Generates a preview of the kitchen with new cabinet colors using Gemini 3 Pro Image Preview
- * This model is best for high-quality image editing instructions.
- */
 export const generateCabinetPreview = async (
   base64Image: string, 
   colorName: string | null, 
@@ -89,7 +78,6 @@ export const generateCabinetPreview = async (
   try {
     let prompt = `Edit this image.`;
     
-    // Handle Color logic
     if (colorName) {
       prompt += ` Paint the kitchen cabinets ${colorName}`;
       if (colorHex) {
@@ -100,20 +88,16 @@ export const generateCabinetPreview = async (
       prompt += ` Keep the existing cabinet color.`;
     }
     
-    // Handle Sheen / Finish
     if (sheen && sheen !== 'Default') {
       prompt += ` Apply a ${sheen} finish to the cabinets.`;
     } else if (!colorName) {
-      // If we are keeping existing color and no sheen specified, explicitly say keep finish details
       prompt += ` Maintain existing finish details.`;
     }
 
-    // Handle Hardware logic
     if (hardwareName && hardwareName !== 'Keep Existing') {
       prompt += ` Replace the cabinet hardware (handles/knobs) with ${hardwareName}.`;
     }
 
-    // Handle Custom Instructions
     if (customInstruction && customInstruction.trim().length > 0) {
       prompt += ` User Instructions/Tweaks: "${customInstruction}".`;
     }
@@ -138,11 +122,9 @@ export const generateCabinetPreview = async (
         ],
       },
       config: {
-        // Nano Banana series (gemini-3-pro-image-preview) does not support responseMimeType
       },
     });
 
-    // Extract the image from the response
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return part.inlineData.data;

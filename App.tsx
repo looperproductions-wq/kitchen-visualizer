@@ -128,37 +128,30 @@ const App: React.FC = () => {
   const handleGenerate = async (newColor?: ColorOption | null, newHardware?: HardwareOption) => {
     if (!image) return;
 
-    // Resolve Hardware
     const hardwareToUse = newHardware || selectedHardware;
 
-    // Resolve Color
     let effectiveColorName: string | null = null;
     let effectiveColorHex: string | null = null;
 
     if (newColor) {
-      // User clicked a preset color
       effectiveColorName = newColor.name;
       effectiveColorHex = newColor.hex;
       setSelectedColor(newColor);
-      setCustomColor(''); // Clear custom input if preset selected
+      setCustomColor(''); 
     } else if (newColor === null) {
-      // User clicked "Original Finish"
       effectiveColorName = null;
       effectiveColorHex = null;
       setSelectedColor(null);
       setCustomColor('');
     } else {
-      // Use existing state (e.g., triggered by hardware change or custom apply button)
       if (customColor.trim()) {
         effectiveColorName = customColor;
-        // Hex remains null for custom text
       } else if (selectedColor) {
         effectiveColorName = selectedColor.name;
         effectiveColorHex = selectedColor.hex;
       }
     }
 
-    // Check valid actions
     const hasColor = !!effectiveColorName;
     const hasHardware = hardwareToUse.id !== 'none';
     const hasInstruction = customInstruction.trim().length > 0;
@@ -169,7 +162,6 @@ const App: React.FC = () => {
       return;
     }
 
-    // If hardware was passed, update state
     if (newHardware) setSelectedHardware(newHardware);
 
     try {
@@ -201,7 +193,7 @@ const App: React.FC = () => {
   const handleCustomColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomColor(e.target.value);
     if (e.target.value.trim().length > 0) {
-      setSelectedColor(null); // Deselect preset if user types custom
+      setSelectedColor(null); 
     }
   };
 
@@ -225,7 +217,6 @@ const App: React.FC = () => {
   }
 
   if (!hasKey) {
-    // ... Auth Screen ...
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <div className="bg-white max-w-md w-full rounded-2xl shadow-xl p-8 text-center border border-slate-200">
