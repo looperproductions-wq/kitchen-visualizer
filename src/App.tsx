@@ -1,25 +1,27 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, PaintBucket, Sparkles, RefreshCw, AlertCircle, Check, Key, MessageSquarePlus, PenTool, Ban, Palette, Droplet, Share2 } from 'lucide-react';
+import { Upload, PaintBucket, Sparkles, RefreshCw, AlertCircle, Check, Key, MessageSquarePlus, PenTool, Ban, Palette, Droplet, Share2, Info } from 'lucide-react';
 import { fileToBase64, analyzeKitchenAndSuggestColors, generateCabinetPreview } from './services/geminiService';
 import { POPULAR_COLORS, HARDWARE_OPTIONS } from './constants';
 import { ColorOption, HardwareOption, ProcessingState } from './types';
 import { LoadingOverlay } from './components/LoadingOverlay';
 import { ImageComparator } from './components/ImageComparator';
-import { DeploymentGuide } from './components/DeploymentGuide';
+// import { DeploymentGuide } from './components/DeploymentGuide'; // Excluded in zip to simplify
+import { ProcessInfographic } from './components/ProcessInfographic';
 
 const SHEEN_OPTIONS = ['Default', 'Matte', 'Satin', 'Semi-Gloss', 'High-Gloss'];
 
 const App: React.FC = () => {
-  const [hasKey, setHasKey] = useState<boolean>(true); // Default to true in prod, relying on env vars
+  const [hasKey, setHasKey] = useState<boolean>(true);
   const [checkingKey, setCheckingKey] = useState<boolean>(true);
   const [isAIStudio, setIsAIStudio] = useState<boolean>(false);
   const [showDeploymentGuide, setShowDeploymentGuide] = useState<boolean>(false);
+  const [showProcessInfographic, setShowProcessInfographic] = useState<boolean>(false);
 
   const [image, setImage] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [status, setStatus] = useState<ProcessingState>('idle');
+  const [loadingMessage, setLoadingMessage] = useState<string>('Processing...');
   
-  // Selection State
   const [selectedColor, setSelectedColor] = useState<ColorOption | null>(null);
   const [customColor, setCustomColor] = useState<string>('');
   const [selectedHardware, setSelectedHardware] = useState<HardwareOption>(HARDWARE_OPTIONS[0]);
@@ -31,62 +33,13 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const checkApiKey = async () => {
-      // In production/Vercel, we rely on the injected process.env.API_KEY
-      // In AIStudio dev environment, we use the window.aistudio object
-      try {
-        const aistudio = (window as any).aistudio;
-        if (aistudio) {
-          setIsAIStudio(true);
-          if (aistudio.hasSelectedApiKey) {
-            const hasSelected = await aistudio.hasSelectedApiKey();
-            setHasKey(hasSelected);
-          } else {
-             setHasKey(false);
-          }
-        } else {
-          // Standard web deployment
-          setIsAIStudio(false);
-          setHasKey(true); 
-        }
-      } catch (e) {
-        console.error("Error checking API key:", e);
-      } finally {
-        setCheckingKey(false);
-      }
-    };
-    checkApiKey();
+    // In the downloaded version, we rely on standard env var
+    setHasKey(!!process.env.API_KEY || false);
+    setCheckingKey(false);
   }, []);
-
-  const handleSelectKey = async () => {
-    const aistudio = (window as any).aistudio;
-    if (aistudio && aistudio.openSelectKey) {
-      await aistudio.openSelectKey();
-      setHasKey(true);
-      setError(null);
-    }
-  };
-
-  const checkAuthError = (err: any) => {
-    const errorStr = (err.message || '') + JSON.stringify(err);
-    if (
-      errorStr.includes("403") ||
-      errorStr.includes("PERMISSION_DENIED") ||
-      errorStr.includes("The caller does not have permission") ||
-      errorStr.includes("Requested entity was not found")
-    ) {
-      if (isAIStudio) {
-        setHasKey(false);
-        setError("Permission denied. Please connect a valid paid Google Cloud Project API Key.");
-      } else {
-        setError("API Configuration Error: Please ensure a valid API_KEY is set in your hosting environment.");
-      }
-      return true;
-    }
-    return false;
-  };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -99,8 +52,10 @@ const App: React.FC = () => {
 
     try {
       setStatus('analyzing');
+      setLoadingMessage("Analyzing your kitchen's style...");
       setError(null);
       setGeneratedImage(null);
+      
       setSelectedColor(null);
       setCustomColor('');
       setSelectedHardware(HARDWARE_OPTIONS[0]);
@@ -117,17 +72,19 @@ const App: React.FC = () => {
       setStatus('idle');
     } catch (err: any) {
       console.error(err);
-      if (checkAuthError(err)) {
-        setStatus('idle');
-        return;
-      }
-      setError('Failed to analyze the image. Please try a different photo.');
+      const errorMessage = err.message || JSON.stringify(err);
+      setError(`Analysis Failed: ${errorMessage}`);
       setStatus('idle');
     }
   };
 
-  const handleGenerate = async (newColor?: ColorOption | null, newHardware?: HardwareOption) => {
+  const handleGenerate = async (
+    newColor?: ColorOption | null, 
+    newHardware?: HardwareOption,
+    specificMessage?: string
+  ) => {
     if (!image) return;
+    if (document.activeElement instanceof HTMLElement) { document.activeElement.blur(); }
 
     const hardwareToUse = newHardware || selectedHardware;
 
@@ -165,6 +122,19 @@ const App: React.FC = () => {
 
     if (newHardware) setSelectedHardware(newHardware);
 
+    let msg = specificMessage || "Processing...";
+    if (!specificMessage) {
+       if (newColor) msg = `Applying ${newColor.name}...`;
+       else if (newHardware) msg = `Installing ${newHardware.name}...`;
+       else if (customColor) msg = `Applying ${customColor}...`;
+       else msg = "Updating design...";
+    }
+    setLoadingMessage(msg);
+
+    if (resultsRef.current) {
+      resultsRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
     try {
       setStatus('generating');
       setError(null);
@@ -182,11 +152,8 @@ const App: React.FC = () => {
       setStatus('complete');
     } catch (err: any) {
       console.error(err);
-      if (checkAuthError(err)) {
-        setStatus('idle');
-        return;
-      }
-      setError('Failed to generate preview. The AI service might be busy.');
+      const errorMessage = err.message || JSON.stringify(err);
+      setError(`Generation Failed: ${errorMessage}`);
       setStatus('idle');
     }
   };
@@ -194,7 +161,7 @@ const App: React.FC = () => {
   const handleCustomColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setCustomColor(e.target.value);
     if (e.target.value.trim().length > 0) {
-      setSelectedColor(null); 
+      setSelectedColor(null);
     }
   };
 
@@ -213,56 +180,19 @@ const App: React.FC = () => {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
+  const getActiveColorForDisplay = () => {
+    if (customColor) return { name: customColor };
+    if (selectedColor) return selectedColor;
+    return null;
+  };
+
   if (checkingKey) {
     return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Loading...</div>;
   }
 
-  if (!hasKey) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-        <div className="bg-white max-w-md w-full rounded-2xl shadow-xl p-8 text-center border border-slate-200">
-          <div className="bg-indigo-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Key className="w-8 h-8 text-indigo-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-slate-900 mb-3">Setup Required</h2>
-          
-          {isAIStudio ? (
-            <>
-              <p className="text-slate-600 mb-6 leading-relaxed">
-                To generate high-quality 4K interior designs, you need to connect a paid Google Cloud Project.
-              </p>
-              <button
-                onClick={handleSelectKey}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-xl transition-all shadow-lg shadow-indigo-200 flex items-center justify-center gap-2"
-              >
-                Connect Google Cloud Project
-              </button>
-              <div className="mt-6 text-xs text-slate-400">
-                <a 
-                  href="https://ai.google.dev/gemini-api/docs/billing" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="hover:text-indigo-600 underline"
-                >
-                  Learn more about billing
-                </a>
-              </div>
-            </>
-          ) : (
-            <div className="text-left bg-slate-50 p-4 rounded-lg border border-slate-200 text-sm text-slate-600">
-              <p className="mb-2 font-semibold text-slate-800">API Key Missing</p>
-              <p className="mb-2">This application requires a Gemini API Key to function.</p>
-              <p>If you are the site owner, please configure the <code className="bg-slate-200 px-1 rounded">API_KEY</code> environment variable in your hosting provider settings.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 selection:bg-indigo-100 selection:text-indigo-900">
-      {showDeploymentGuide && <DeploymentGuide onClose={() => setShowDeploymentGuide(false)} />}
+      {showProcessInfographic && <ProcessInfographic onClose={() => setShowProcessInfographic(false)} />}
       
       <header className="bg-white border-b border-slate-200 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -274,6 +204,12 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-3">
+             <button 
+              onClick={() => setShowProcessInfographic(true)}
+              className="text-sm font-medium text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2"
+            >
+              <Info className="w-4 h-4" /> How it Works
+            </button>
              <button 
               onClick={() => setShowDeploymentGuide(true)}
               className="text-sm font-medium text-indigo-600 hover:bg-indigo-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-2"
@@ -297,12 +233,7 @@ const App: React.FC = () => {
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
-            <p className="text-red-700 text-sm flex-1">{error}</p>
-            {isAIStudio && error.includes("Permission") && (
-               <button onClick={handleSelectKey} className="text-xs underline text-red-800 font-semibold ml-auto whitespace-nowrap">
-                 Change Key
-               </button>
-            )}
+            <p className="text-red-700 text-sm flex-1 break-words">{error}</p>
           </div>
         )}
 
@@ -337,12 +268,19 @@ const App: React.FC = () => {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             
             <div className="lg:col-span-8 space-y-6">
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 relative">
-                {status === 'analyzing' && <LoadingOverlay message="Analyzing your kitchen's style..." />}
-                {status === 'generating' && <LoadingOverlay message="Painting your cabinets..." />}
+              <div 
+                ref={resultsRef}
+                className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 relative scroll-mt-24"
+              >
+                {status === 'analyzing' && <LoadingOverlay message={loadingMessage} />}
+                {status === 'generating' && <LoadingOverlay message={loadingMessage} />}
                 
                 {generatedImage ? (
-                  <ImageComparator originalImage={image} generatedImage={generatedImage} />
+                  <ImageComparator 
+                    originalImage={image} 
+                    generatedImage={generatedImage} 
+                    activeColor={getActiveColorForDisplay()} 
+                  />
                 ) : (
                    <div className="relative w-full bg-slate-100 rounded-xl overflow-hidden min-h-[300px]">
                      <img 
@@ -375,7 +313,7 @@ const App: React.FC = () => {
             {/* Right Column: Controls */}
             <div className="lg:col-span-4 space-y-8">
 
-               {/* Custom Tweaks - Moved to Top */}
+               {/* Custom Tweaks */}
               <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-5">
                 <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                   <MessageSquarePlus className="w-4 h-4 text-slate-400" />
@@ -390,7 +328,7 @@ const App: React.FC = () => {
                   />
                   <div className="mt-2 text-right">
                     <button 
-                        onClick={() => handleGenerate()}
+                        onClick={() => handleGenerate(undefined, undefined, "Applying custom tweaks...")}
                         className="text-xs font-medium text-indigo-600 hover:text-indigo-800"
                     >
                         Apply Tweak
@@ -433,7 +371,7 @@ const App: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => handleGenerate()}
+                      onClick={() => handleGenerate(undefined, undefined, "Applying custom look...")}
                       disabled={status !== 'idle' && status !== 'complete'}
                       className="w-full bg-slate-900 hover:bg-slate-800 text-white text-sm font-medium py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
@@ -454,7 +392,7 @@ const App: React.FC = () => {
                     {aiSuggestions.map((color) => (
                       <button
                         key={color.name}
-                        onClick={() => handleGenerate(color, undefined)}
+                        onClick={() => handleGenerate(color, undefined, `Applying ${color.name}...`)}
                         disabled={status !== 'idle' && status !== 'complete'}
                         className={`w-full flex items-center gap-3 p-2 rounded-lg border transition-all hover:shadow-md ${
                           selectedColor?.name === color.name 
@@ -487,7 +425,7 @@ const App: React.FC = () => {
                 <div className="grid grid-cols-2 gap-3">
                   
                   <button
-                    onClick={() => handleGenerate(null, undefined)}
+                    onClick={() => handleGenerate(null, undefined, "Restoring original finish...")}
                     disabled={status !== 'idle' && status !== 'complete'}
                     className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${
                        selectedColor === null && !customColor
@@ -504,7 +442,7 @@ const App: React.FC = () => {
                   {POPULAR_COLORS.map((color) => (
                     <button
                       key={color.name}
-                      onClick={() => handleGenerate(color, undefined)}
+                      onClick={() => handleGenerate(color, undefined, `Applying ${color.name}...`)}
                       disabled={status !== 'idle' && status !== 'complete'}
                       className={`flex flex-col items-center justify-center p-3 rounded-lg border transition-all ${
                          selectedColor?.name === color.name 
@@ -532,7 +470,7 @@ const App: React.FC = () => {
                   {HARDWARE_OPTIONS.map((hw) => (
                     <button
                       key={hw.id}
-                      onClick={() => handleGenerate(undefined, hw)}
+                      onClick={() => handleGenerate(undefined, hw, `Installing ${hw.name}...`)}
                       disabled={status !== 'idle' && status !== 'complete'}
                       className={`p-2 rounded-lg border text-xs font-medium transition-all text-center ${
                          selectedHardware.id === hw.id
@@ -548,10 +486,18 @@ const App: React.FC = () => {
 
             </div>
           </div>
-        )}
-      </main>
+        </div>
+
+        <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end">
+           <button 
+            onClick={onClose}
+            className="px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-lg transition-colors"
+          >
+            Done
+          </button>
+        </div>
+
+      </div>
     </div>
   );
 };
-
-export default App;

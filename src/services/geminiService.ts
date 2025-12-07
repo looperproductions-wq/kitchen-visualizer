@@ -22,15 +22,8 @@ export const analyzeKitchenAndSuggestColors = async (base64Image: string): Promi
       model: "gemini-2.5-flash",
       contents: {
         parts: [
-          {
-            inlineData: {
-              mimeType: "image/jpeg",
-              data: base64Image,
-            },
-          },
-          {
-            text: "Analyze this kitchen's existing elements (flooring, countertops, backsplash, lighting). Suggest 4 specific paint colors for the cabinets that would complement the room perfectly. Return the response in JSON format.",
-          },
+          { inlineData: { mimeType: "image/jpeg", data: base64Image } },
+          { text: "Analyze this kitchen's existing elements (flooring, countertops, backsplash, lighting). Suggest 4 specific paint colors for the cabinets that would complement the room perfectly. Return the response in JSON format." },
         ],
       },
       config: {
@@ -54,10 +47,8 @@ export const analyzeKitchenAndSuggestColors = async (base64Image: string): Promi
         }
       }
     });
-
     const text = response.text;
     if (!text) throw new Error("No response from AI");
-    
     return JSON.parse(text) as AnalysisResult;
   } catch (error) {
     console.error("Error analyzing image:", error);
@@ -74,63 +65,36 @@ export const generateCabinetPreview = async (
   sheen?: string
 ): Promise<string> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
   try {
     let prompt = `Edit this image.`;
-    
     if (colorName) {
       prompt += ` Paint the kitchen cabinets ${colorName}`;
-      if (colorHex) {
-        prompt += ` (approximate hex: ${colorHex})`;
-      }
+      if (colorHex) prompt += ` (approximate hex: ${colorHex})`;
       prompt += `.`;
     } else {
       prompt += ` Keep the existing cabinet color.`;
     }
-    
     if (sheen && sheen !== 'Default') {
       prompt += ` Apply a ${sheen} finish to the cabinets.`;
     } else if (!colorName) {
       prompt += ` Maintain existing finish details.`;
     }
-
     if (hardwareName && hardwareName !== 'Keep Existing') {
       prompt += ` Replace the cabinet hardware (handles/knobs) with ${hardwareName}.`;
     }
-
     if (customInstruction && customInstruction.trim().length > 0) {
       prompt += ` User Instructions/Tweaks: "${customInstruction}".`;
     }
-
-    prompt += ` Keep the countertops, backsplash, flooring, walls, appliances, and lighting largely as they are unless instructed otherwise. 
-    Maintain the wood grain texture or finish details if visible (unless changing sheen). 
-    Ensure a photorealistic interior design result. High quality, 4k.`;
+    prompt += ` Keep the countertops, backsplash, flooring, walls, appliances, and lighting largely as they are unless instructed otherwise. Maintain the wood grain texture or finish details if visible (unless changing sheen). Ensure a photorealistic interior design result. High quality, 4k.`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              data: base64Image,
-              mimeType: 'image/jpeg',
-            },
-          },
-          {
-            text: prompt,
-          },
-        ],
-      },
-      config: {
-      },
+      contents: { parts: [{ inlineData: { data: base64Image, mimeType: 'image/jpeg' } }, { text: prompt }] },
+      config: {},
     });
-
     for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return part.inlineData.data;
-      }
+      if (part.inlineData) return part.inlineData.data;
     }
-
     throw new Error("No image generated in response");
   } catch (error) {
     console.error("Error generating preview:", error);

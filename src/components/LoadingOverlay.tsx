@@ -1,10 +1,6 @@
 import React from 'react';
 import { Loader2 } from 'lucide-react';
-
-interface LoadingOverlayProps {
-  message: string;
-}
-
+interface LoadingOverlayProps { message: string; }
 export const LoadingOverlay: React.FC<LoadingOverlayProps> = ({ message }) => {
   return (
     <div className="absolute inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center rounded-xl">
